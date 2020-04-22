@@ -1,10 +1,21 @@
-# Continuous Matrix Product Operator (cMPO)
+<div align="center">
+<img align="middle" src="_assets/logo.png" width="500" alt="logo"/>
+<h2> Continuous Matrix Product Operator (cMPO) for Quantum Thermodynamics </h2>
+</div>
 
-This repository includes the python3 + pytorch implementation of the cMPO approach to finite temperature quantum states. This approach is applicable to one-dimensional quantum systems with short-range or long-range interactions. This approach is described in the paper "Continuous Matrix Product Operator Approach to Finite Temperature Quantum States" (arXiv link).
 
-## Usage
+This is a PyTorch implementation of the cMPO approach to finite temperature quantum states. This approach is applicable to one-dimensional quantum systems with short-range or long-range interactions. This approach is described in the paper "Continuous Matrix Product Operator Approach to Finite Temperature Quantum States" (arXiv link).
 
-As an example, by 
+## Features
+
+- **Say NO to Trotter error:** thanks to the coutinuous-time formulation 
+- **Simple yet generic:**  a unified interface to any Hamiltonian with an MPO representation
+
+## Bonus 
+
+- **Real-frequency local spectral functions:** analytic continuation is joyful, finally
+
+## Example
 
 ```bash
 python cmpo_1Dlongrange_TMRG.py -chi 10 -beta 10 -Gamma 1 -J 1 -resultdir isingdata
