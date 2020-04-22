@@ -72,8 +72,8 @@ class xxz_spm(object):
             np.sqrt(Jz_abs)*s.Z.view(1,2,2)/2
             ), dim=0)
         R = torch.cat((
-            s.Sm.view(1,2,2)/np.sqrt(2),
-            s.Sp.view(1,2,2)/np.sqrt(2),
+            s.Sm.view(1,2,2)*np.sqrt(Jxy/2),
+            s.Sp.view(1,2,2)*np.sqrt(Jxy/2),
             -Jz_sign * np.sqrt(Jz_abs)*s.Z.view(1,2,2)/2
             ), dim=0)
         P = torch.zeros(3,3,2,2, dtype=dtype, device=device)
@@ -88,7 +88,6 @@ class xxz(object):
         Alternative construction of the cMPO with Sx, iSy, Sz
     """
     def __init__(self, Jz, Jxy, dtype, device):
-        # Hij = -Jxy (Sx_i Sx_j + Sy_i Sy_j) + Jz Sz_i Sz_j
         s = spin_half(dtype, device)
         Jz_sign = np.sign(Jz)
         Jz_abs = np.abs(Jz)
@@ -173,7 +172,7 @@ class ising_powLR(object):
         path='power_fit_parameters_alpha{:.2f}.pt'.format(alpha)
 
         # optimization obtained over range of 200 sites
-        fa = lambda x, alpha: J/np.float_power(x, alpha)
+        fa = lambda x, alpha: 1/np.float_power(x, alpha)
         fb = lambda x, mu_vec, l_vec: mu_vec @ torch.exp(-l_vec * x)
         def func(mu_vec, l_vec):
             y = 0
@@ -212,8 +211,8 @@ class ising_powLR(object):
         Q = Gamma * s.X
         mu_abs_vec = torch.abs(mu_vec)
         mu_sgn_vec = torch.sign(mu_vec)
-        L = torch.einsum('m,ab->mab', torch.exp(-l_vec/2)*torch.sqrt(mu_abs_vec), s.Z)
-        R = torch.einsum('m,ab->mab', torch.exp(-l_vec/2)*torch.sqrt(mu_abs_vec)*mu_sgn_vec, s.Z)
+        L = torch.einsum('m,ab->mab', torch.exp(-l_vec/2)*torch.sqrt(J*mu_abs_vec), s.Z)
+        R = torch.einsum('m,ab->mab', torch.exp(-l_vec/2)*torch.sqrt(J*mu_abs_vec)*mu_sgn_vec, s.Z)
         P = torch.einsum('m,mn,ab->mnab',torch.exp(-l_vec), torch.eye(K, dtype=dtype, device=device), s.Id)
         self.T = pcmpo(Q, L, R, P) 
         self.W = torch.diag(mu_sgn_vec)
