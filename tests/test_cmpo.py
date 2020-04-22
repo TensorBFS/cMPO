@@ -1,5 +1,8 @@
 import torch
 import numpy as np
+import sys, os
+testdir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(testdir+"/..")
 from cmpo import *
 
 def test_project():

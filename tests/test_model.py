@@ -1,8 +1,12 @@
 import torch
 import numpy as np
+import functools
+import sys, os
+testdir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(testdir+"/..")
 from cmpo import *
 from model import *
-import functools
+
 tnp = lambda a, b, c: torch.einsum('ab,cd,ef->acebdf', a, b, c).view(a.shape[0]*b.shape[0]*c.shape[0], a.shape[1]*b.shape[1]*c.shape[1])
 
 def decorator_test_model(func):
