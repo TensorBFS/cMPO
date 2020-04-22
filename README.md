@@ -3,6 +3,7 @@
 <h2> Continuous Matrix Product Operator (cMPO) for Quantum Thermodynamics </h2>
 </div>
 
+[![Build Status](https://api.travis-ci.com/TensorBFS/cMPO.svg?token=bCr4MXNqz8r1WxLSWzAC&branch=master)](https://travis-ci.com/github/TensorBFS/cMPO)
 
 This is a PyTorch implementation of the cMPO approach to finite temperature quantum states. The cMPO approach is applicable to one-dimensional quantum systems with short-range or long-range interactions. This approach is described in the paper "Continuous Matrix Product Operator Approach to Finite Temperature Quantum States" (arXiv link).
 
