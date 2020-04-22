@@ -9,10 +9,10 @@ os.environ['OMP_NUM_THREADS']='8'
 torch.set_num_threads(8)
 torch.manual_seed(42)
 
-from pcmpo_1Dlongrange import pcmpo, pcmps, multiply, act, ln_ovlp, density_matrix, mera_update, self_compress, data_cmps, datasave, dataload
-import model_1DLR as model
+from cmpo import *
+import model
 
-import cmpo_1Dlongrange_TMRG as tmrg
+import power_projection as power
 
 if __name__=='__main__':
     import argparse
@@ -51,11 +51,11 @@ if __name__=='__main__':
     R = torch.nn.Parameter(R)
     cmpsdata = data_cmps(Q, R)
     dataload(cmpsdata, cmpsdata_name)
-    psi = pcmps(torch.diag(Q), R).detach()
+    psi = cmps(torch.diag(Q), R).detach()
 
-    #chi_loc = tmrg.chi(psi, W, T, s.Z, s.Z, beta) / beta
+    #chi_loc = power.chi(psi, W, T, s.Z, s.Z, beta) / beta
     wrange = np.linspace(-0.1, 0.1, 21) + 1e-6
-    S0 = 0.01*np.sum([tmrg.spectral(psi, W, T, s.Z, s.Z, beta, omega, eta=0.05) for omega in wrange])
+    S0 = 0.01*np.sum([power.spectral(psi, W, T, s.Z, s.Z, beta, omega, eta=0.05) for omega in wrange])
 
     out = args.out
     f_out = io.open(out, 'a')
@@ -70,7 +70,7 @@ if __name__=='__main__':
 
 #    omega_list = np.linspace(-0.1,0.1,101)+1e-6 
 #    for eta in [0.1, 0.05, 0.01, 0.001]:
-#        S_list = [tmrg.spectral(psi, W, T, s.Z, s.Z, beta, omega, eta) for omega in omega_list]
+#        S_list = [power.spectral(psi, W, T, s.Z, s.Z, beta, omega, eta) for omega in omega_list]
 #        plt.plot(omega_list, np.abs(S_list), '-', markerfacecolor='none', label=r'$\eta={:.3f}$'.format(eta))
 #    plt.legend()
 #    plt.savefig('hello.pdf')

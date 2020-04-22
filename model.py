@@ -23,7 +23,7 @@
 """
 
 import torch
-from pcmpo_1Dlongrange import pcmpo
+from cmpo import cmpo
 import numpy as np
 
 torch.manual_seed(42)
@@ -50,7 +50,7 @@ class ising(object):
         L = np.sqrt(J) * s.Z.view(1,2,2)
         R = np.sqrt(J) * s.Z.view(1,2,2)
         P = torch.zeros(1,1,2,2, dtype=dtype, device=device)
-        self.T = pcmpo(Q, L, R, P) 
+        self.T = cmpo(Q, L, R, P) 
         self.W = torch.diag(torch.tensor([1], dtype=dtype, device=device))
         self.ph_leg = 2
         self.d = 1
@@ -77,7 +77,7 @@ class xxz_spm(object):
             -Jz_sign * np.sqrt(Jz_abs)*s.Z.view(1,2,2)/2
             ), dim=0)
         P = torch.zeros(3,3,2,2, dtype=dtype, device=device)
-        self.T = pcmpo(Q, L, R, P)
+        self.T = cmpo(Q, L, R, P)
         self.W = torch.tensor([[0, 1, 0], [1, 0, 0], [0, 0, -Jz_sign]], dtype=dtype, device=device)
         self.ph_leg = 2
         self.d = 3
@@ -104,7 +104,7 @@ class xxz(object):
              -Jz_sign * np.sqrt(Jz_abs)/2 * s.Z.view(1,2,2)
              ), dim=0 )
         P = torch.zeros(3,3,2,2, dtype=dtype, device=device)
-        self.T = pcmpo(Q, L, R, P)
+        self.T = cmpo(Q, L, R, P)
         self.W = torch.diag(torch.tensor([1,-1,-Jz_sign], dtype=dtype, device=device))
         self.ph_leg = 2 
         self.d = 3
@@ -127,7 +127,7 @@ class ising_NNN(object):
              ), dim=0 )
         P0 = torch.tensor([[0, 2*J2/J], [0, 0]], dtype=dtype, device=device)
         P = torch.einsum('mn,ab->mnab', P0, s.Id) 
-        self.T = pcmpo(Q, L, R, P) 
+        self.T = cmpo(Q, L, R, P) 
         self.W = torch.tensor([[0, 1], [1, 0]], dtype=dtype, device=device)
         self.ph_leg =2
         self.d = 2
@@ -142,7 +142,7 @@ class ising_expLR(object):
         L = np.sqrt(J) * np.exp(-alpha/2) * s.Z.view(1,2,2)
         R = np.sqrt(J) * np.exp(-alpha/2) * s.Z.view(1,2,2)
         P = np.exp(-alpha) * s.Id.view(1,1,2,2)
-        self.T = pcmpo(Q, L, R, P) 
+        self.T = cmpo(Q, L, R, P) 
         self.W = torch.diag(torch.tensor([1], dtype=dtype, device=device))
         self.ph_leg =2
         self.d = 1
@@ -167,7 +167,7 @@ class ising_powLR(object):
         l_vec = torch.nn.Parameter(torch.tensor(l_vec0, dtype=dtype, device=device))
 
         # save parameters (borrow the class from cmps)
-        from pcmpo_1Dlongrange import data_cmps, datasave, dataload 
+        from cmpo import data_cmps, datasave, dataload 
         para_data = data_cmps(mu_vec, l_vec)
         path='power_fit_parameters_alpha{:.2f}.pt'.format(alpha)
 
@@ -214,7 +214,7 @@ class ising_powLR(object):
         L = torch.einsum('m,ab->mab', torch.exp(-l_vec/2)*torch.sqrt(J*mu_abs_vec), s.Z)
         R = torch.einsum('m,ab->mab', torch.exp(-l_vec/2)*torch.sqrt(J*mu_abs_vec)*mu_sgn_vec, s.Z)
         P = torch.einsum('m,mn,ab->mnab',torch.exp(-l_vec), torch.eye(K, dtype=dtype, device=device), s.Id)
-        self.T = pcmpo(Q, L, R, P) 
+        self.T = cmpo(Q, L, R, P) 
         self.W = torch.diag(mu_sgn_vec)
         self.ph_leg = 2
         self.d = K

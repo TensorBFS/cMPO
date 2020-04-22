@@ -1,7 +1,7 @@
 import torch
 import numpy as np
-from pcmpo_1Dlongrange import *
-from model_1DLR import *
+from cmpo import *
+from model import *
 import functools
 tnp = lambda a, b, c: torch.einsum('ab,cd,ef->acebdf', a, b, c).view(a.shape[0]*b.shape[0]*c.shape[0], a.shape[1]*b.shape[1]*c.shape[1])
 
@@ -22,8 +22,8 @@ def decorator_test_model(func):
         # a three-site open-boundary system can be viewed as <Lpsi|T|Rpsi>
         # check that -K = H
         # this tests the correctness of the cMPO construction
-        Rpsi = pcmps(T.Q, T.L)
-        Lpsi = pcmps(T.Q, T.R)
+        Rpsi = cmps(T.Q, T.L)
+        Lpsi = cmps(T.Q, T.R)
         TR = act(T, Rpsi)
         K1 = density_matrix(Lpsi, TR)
         LT = Lact(Lpsi, T)

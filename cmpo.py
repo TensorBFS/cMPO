@@ -13,7 +13,7 @@ def eigensolver(M):
     """ Eigensolver
         manually symmetrize M before the eigen decomposition
     """
-    return torch.symeig(0.5*(M+M.t()))
+    return torch.symeig(0.5*(M+M.t()), eigenvectors=True)
 
 def log_trace_expm(beta, mat):
     """ calculates log(tr(exp(beta * mat)) )
@@ -21,7 +21,7 @@ def log_trace_expm(beta, mat):
     w, _ = eigensolver(mat)
     return torch.logsumexp(beta*w, dim=0)
 
-class pcmpo(object):
+class cmpo(object):
     """ the object for cMPO
         dim: the physical dimension of the cMPO
         the structure of cMPO 
@@ -45,7 +45,7 @@ class pcmpo(object):
     def detach(self):
         """ return the detached cMPO object, clear autograd information
         """
-        return pcmpo(self.Q.detach(), self.L.detach(), self.R.detach(), self.P.detach())
+        return cmpo(self.Q.detach(), self.L.detach(), self.R.detach(), self.P.detach())
 
     def project(self, U):
         """ perform a unitary transformation in the imaginary-time direction
@@ -55,7 +55,7 @@ class pcmpo(object):
         L = U.t() @ self.L @ U
         R = U.t() @ self.R @ U
         P = U.t() @ self.P @ U
-        return pcmpo(Q, L, R, P)
+        return cmpo(Q, L, R, P)
 
     def t(self):
         """ give the transpose of the cMPO
@@ -64,9 +64,9 @@ class pcmpo(object):
         L = self.R
         R = self.L
         P = torch.einsum('abmn->bamn', self.P)
-        return pcmpo(Q, L, R, P)
+        return cmpo(Q, L, R, P)
 
-class pcmps(object):
+class cmps(object):
     """ the object for cMPS
         dim: the physical dimension of the cMPS
         the structure of cMPS 
@@ -88,7 +88,7 @@ class pcmps(object):
     def detach(self):
         """ return the detached cMPS object, clear autograd information
         """
-        return pcmps(self.Q.detach(), self.R.detach())
+        return cmps(self.Q.detach(), self.R.detach())
 
     def project(self, U):
         """ perform a unitary transformation in the imaginary-time direction
@@ -96,7 +96,7 @@ class pcmps(object):
         """
         Q = U.t() @ self.Q @ U
         R = U.t() @ self.R @ U
-        return pcmps(Q, R)
+        return cmps(Q, R)
 
     def diagQ(self):
         """ transform the cMPS to the gauge where Q is a diagonalized matrix 
@@ -116,7 +116,7 @@ def multiply(W, mps):
     """
     dtype, device = mps.dtype, mps.device
     R1 = torch.einsum('mn, nab->mab', W, mps.R)
-    return pcmps(mps.Q, R1)
+    return cmps(mps.Q, R1)
 
 def act(mpo, mps):
     """ act the cmps to the right of cmpo
@@ -140,7 +140,7 @@ def act(mpo, mps):
     R_rslt = torch.einsum('mab,mcd->macbd', mpo.L, Is.repeat(d,1,1)).contiguous().view(d, Do*Ds, Do*Ds) \
            + torch.einsum('mnab,ncd->macbd', mpo.P, mps.R).contiguous().view(d, Do*Ds, Do*Ds)
 
-    return pcmps(Q_rslt, R_rslt)
+    return cmps(Q_rslt, R_rslt)
 
 def Lact(mps, mpo):
     """ act the cmps to the left of cmpo
@@ -159,7 +159,7 @@ def Lact(mps, mpo):
     Tmps = act(mpo.t(), mps)
     Q = torch.einsum('abcd->badc', Tmps.Q.view(Do, Ds, Do, Ds)).contiguous().view(Do*Ds, Do*Ds)
     R = torch.einsum('mabcd->mbadc', Tmps.R.view(d, Do, Ds, Do, Ds)).contiguous().view(d, Do*Ds, Do*Ds)
-    return pcmps(Q, R)
+    return cmps(Q, R)
 
 def density_matrix(mps1, mps2):
     """ construct the K matrix corresponding to <mps1|mps2>
@@ -256,7 +256,7 @@ def variational_compr(mps, beta, chi, chkp_loc, tol=1e-8):
 
     def closure():
         optimizer.zero_grad()
-        psi = pcmps(torch.diag(Q), R)
+        psi = cmps(torch.diag(Q), R)
         loss = - Fidelity(psi, mps, beta)
         loss.backward()
         return loss
@@ -273,7 +273,7 @@ def variational_compr(mps, beta, chi, chkp_loc, tol=1e-8):
     # "normalize"
     with torch.no_grad():
         Q -= torch.max(Q)
-        psi = pcmps(torch.diag(Q), R) 
+        psi = cmps(torch.diag(Q), R) 
     # checkpoint
     datasave(psi_data, chkp_loc)
 

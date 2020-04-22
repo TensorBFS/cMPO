@@ -1,4 +1,4 @@
-""" main program: TMRG procedure
+""" main program: power projection procedure
 """
 
 import numpy as np
@@ -9,8 +9,8 @@ os.environ['OMP_NUM_THREADS']='15'
 torch.set_num_threads(15)
 torch.manual_seed(42)
 
-from pcmpo_1Dlongrange import *
-import model_1DLR as model
+from cmpo import *
+import model
 
 def F(psi, Lpsi, T, beta):
     """ calculate the free energy by
@@ -184,7 +184,7 @@ def klein(psi, W, beta):
         W: transform psi to the left eigenvector
         beta: inverse temperature
     """
-    chi = psi.dim
+    bondD = psi.dim
 
     Wpsi = multiply(W, psi)
     M = density_matrix(psi, Wpsi)
@@ -192,7 +192,7 @@ def klein(psi, W, beta):
     w_nm = w - torch.logsumexp(beta * w, dim=0)/beta
     
     exp_M = v @ torch.diag(torch.exp(0.5*beta*w_nm)) @ v.t()
-    gk = torch.einsum('abba->', exp_M.reshape(chi,chi,chi,chi))
+    gk = torch.einsum('abba->', exp_M.reshape(bondD,bondD,bondD,bondD))
     sk = 2*torch.log(gk)
 
     return sk.item() 
@@ -214,7 +214,7 @@ def name_gen(args):
     """
     fl_to_str = lambda x: '{:.4f}'.format(x)
     s = ''
-    s += '_chi' + str(args.chi) 
+    s += 'bondD' + str(args.bondD) 
     s += '_beta' + fl_to_str(args.beta)
     s += '_Gamma' + fl_to_str(args.Gamma)
     s += '_J' + fl_to_str(args.J)
@@ -223,8 +223,7 @@ def name_gen(args):
 if __name__=='__main__':
     import argparse
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument("-chi", type=int, default=2, help="tau direction dim")
-
+    parser.add_argument("-bondD", type=int, default=2, help="tau direction bond dimension")
     parser.add_argument("-beta", type=float, default=4.0 , help="beta")
     parser.add_argument("-Gamma", type=float, default=1.0, help="Gamma")
     parser.add_argument("-J", type=float, default=1.0, help="J")
@@ -238,30 +237,30 @@ if __name__=='__main__':
     args = parser.parse_args()
     device = torch.device("cpu" if args.cuda<0 else "cuda:"+str(args.cuda))
     dtype = torch.float32 if args.float32 else torch.float64
-    chi = args.chi
+    bondD = args.bondD
     beta = args.beta
 
     ### datafile
     if (not os.path.exists(args.resultdir)):
         print("---> creating directory to save the result: " + args.resultdir)
-    key = args.resultdir+'/1DLR'+name_gen(args)
+    key = args.resultdir+'/'+name_gen(args)
 
     cmd = ['mkdir', '-p', key]
     subprocess.check_call(cmd)
     print("---> log and chkp saved to ", key)
 
-    ### construct cMPO. for more models see model_1DLR.py
+    ### construct cMPO. for more models see model.py
     s = model.spin_half(dtype, device)
-    ising = model.ising(Gamma=Gamma, J=J, dtype=dtype, device=device) # cmpo def
+    ising = model.ising(Gamma=args.Gamma, J=args.J, dtype=dtype, device=device) # cmpo def
     T = ising.T
     W = ising.W
     ph_leg = ising.ph_leg
 
     ### initialize
-    ### after initialization chi/ph_leg < psi.dim < or = chi
-    init_step = int(np.floor(np.log(chi) / np.log(ph_leg)))
-    psi = pcmps(T.Q, T.L)
-    Lpsi = pcmps(T.Q, T.R)
+    ### after initialization bondD/ph_leg < psi.dim < or = bondD
+    init_step = int(np.floor(np.log(bondD) / np.log(ph_leg)))
+    psi = cmps(T.Q, T.L)
+    Lpsi = cmps(T.Q, T.R)
     for ix in range(init_step-1):
         psi = act(T, psi)  
         Lpsi = act(T.t(), psi)
@@ -273,10 +272,10 @@ if __name__=='__main__':
     Fmin = 9.9e9
     while power_counter < 3:
         Tpsi = act(T, psi)
-        psi = variational_compr(Tpsi, beta, chi, chkp_loc=key+'/psi_{:03d}.pt'.format(step))
+        psi = variational_compr(Tpsi, beta, bondD, chkp_loc=key+'/psi_{:03d}.pt'.format(step))
         if W is None:
             LpsiT = act(T.t(), Lpsi)
-            Lpsi = variational_compr(LpsiT, beta, chi, chkp_loc=key+'/psi_{:03d}.pt'.format(step))
+            Lpsi = variational_compr(LpsiT, beta, bondD, chkp_loc=key+'/psi_{:03d}.pt'.format(step))
         else:
             Lpsi = multiply(W, psi)
 

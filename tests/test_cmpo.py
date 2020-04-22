@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from pcmpo_1Dlongrange import *
+from cmpo import *
 
 def test_project():
     """ Given a cMPS, check that the cMPS is unchanged after projecting a 
@@ -12,7 +12,7 @@ def test_project():
     Q = torch.rand(8,8, dtype=dtype, device=device)
     R = torch.rand(4,8,8, dtype=dtype, device=device)
     beta = 10*torch.rand(1, dtype=dtype, device=device).item()
-    mps = pcmps(Q, R)
+    mps = cmps(Q, R)
 
     A = torch.rand(8,8, dtype=dtype, device=device)
     A = A + A.t()
