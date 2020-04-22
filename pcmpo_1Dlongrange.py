@@ -9,14 +9,11 @@ os.environ['OMP_NUM_THREADS']='15'
 torch.set_num_threads(15)
 torch.manual_seed(42)
 
-from eigh import EigenSolver
-eigensolver = EigenSolver.apply
-
 def eigensolver(M):
     """ Eigensolver
         manually symmetrize M before the eigen decomposition
     """
-    return EigenSolver.apply(0.5*(M+M.t()))
+    return torch.symeig(0.5*(M+M.t()))
 
 def log_trace_expm(beta, mat):
     """ calculates log(tr(exp(beta * mat)) )
