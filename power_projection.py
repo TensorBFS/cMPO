@@ -188,7 +188,7 @@ def klein(psi, W, beta):
 
     Wpsi = multiply(W, psi)
     M = density_matrix(psi, Wpsi)
-    w, v = eigensolver(M.as_tensor())
+    w, v = eigensolver(M)
     w_nm = w - torch.logsumexp(beta * w, dim=0)/beta
     
     exp_M = v @ torch.diag(torch.exp(0.5*beta*w_nm)) @ v.t()
@@ -204,9 +204,8 @@ def effectiveH(psi, Lpsi, num):
         num: number of states
     """
     H = density_matrix(Lpsi, psi)
-    mat = H.as_tensor()
 
-    w, _ = eigensolver(mat)
+    w, _ = eigensolver(H)
     return -w[-num:] + w[-1]
 
 def name_gen(args):
@@ -275,7 +274,7 @@ if __name__=='__main__':
         psi = variational_compr(Tpsi, beta, bondD, chkp_loc=key+'/psi_{:03d}.pt'.format(step))
         if W is None:
             LpsiT = act(T.t(), Lpsi)
-            Lpsi = variational_compr(LpsiT, beta, bondD, chkp_loc=key+'/psi_{:03d}.pt'.format(step))
+            Lpsi = variational_compr(LpsiT, beta, bondD, chkp_loc=key+'/Lpsi_{:03d}.pt'.format(step))
         else:
             Lpsi = multiply(W, psi)
 
@@ -300,10 +299,3 @@ if __name__=='__main__':
             power_counter += 1
     print('  ')
 
-    #print('corr')
-    #for tau in np.linspace(0, beta, 11):
-    #    print(str(tau) + ' ' + str(Corr(psi, W, T, s.Z/2, s.Z/2, beta, tau)) )
-
-    """
-    corr_log = io.open('corr.txt', 'a')
-    """

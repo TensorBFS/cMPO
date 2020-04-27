@@ -44,18 +44,33 @@ if __name__=='__main__':
     optim_step = int(data_arr[np.argmin(data_arr[:, 1]), 0])
     print('read data from step %g'%optim_step)
 
-    cmpsdata_name = args.data[:-9]+'/psi_{:03d}.pt'.format(optim_step)
+    # read out right eigenvector
+    psidata_name = args.data[:-9]+'/psi_{:03d}.pt'.format(optim_step)
     Q = torch.rand(bondD, dtype=dtype, device=device)
     R = torch.rand(d,bondD,bondD, dtype=dtype, device=device)
     Q = torch.nn.Parameter(Q)
     R = torch.nn.Parameter(R)
-    cmpsdata = data_cmps(Q, R)
-    dataload(cmpsdata, cmpsdata_name)
+    psidata = data_cmps(Q, R)
+    dataload(psidata, psidata_name)
     psi = cmps(torch.diag(Q), R).detach()
 
-    Lpsi = multiply(W, psi)
-    Z_value = AL_entropy(psi, Lpsi, T, s.Z, beta)
+    # read out left eigenvector
+    if W is None:
+        Lpsidata_name = args.data[:-9]+'/Lpsi_{:03d}.pt'.format(optim_step)
+        Ql = torch.rand(bondD, dtype=dtype, device=device)
+        Rl = torch.rand(d,bondD,bondD, dtype=dtype, device=device)
+        Ql = torch.nn.Parameter(Ql)
+        Rl = torch.nn.Parameter(Rl)
+        Lpsidata = data_cmps(Ql, Rl)
+        dataload(Lpsidata, Lpsidata_name)
+        Lpsi = cmps(torch.diag(Ql), Rl).detach()
+    else:
+        Lpsi = multiply(W, psi)
+   
+    # calculate  
+    Z_value = Obsv(psi, Lpsi, T, s.Z, beta)
 
+    # output
     out = args.out
     f_out = io.open(out, 'a')
     f_out.write('{:.4f}  {:.12f} \n'.format(1/beta, Z_value))
