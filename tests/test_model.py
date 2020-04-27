@@ -54,7 +54,7 @@ def test_ising():
 
 @decorator_test_model
 def test_xxz_spm():
-    Jz, Jxy = 0.78, 0.87
+    Jz, Jxy = 0.78, -0.87
     def func(Jz, Jxy):
         # cmpo
         model = xxz_spm(Jz=Jz, Jxy=Jxy, dtype=torch.float64, device='cpu')
@@ -68,7 +68,7 @@ def test_xxz_spm():
 
 @decorator_test_model
 def test_xxz():
-    Jz, Jxy = 0.78, 0.87
+    Jz, Jxy = 0.78, -0.87
     def func(Jz, Jxy):
         # cmpo
         model = xxz(Jz=Jz, Jxy=Jxy, dtype=torch.float64, device='cpu')
@@ -122,6 +122,3 @@ def test_ising_powLR():
         return model, H 
     return func(Gamma, J, alpha)
 
-#@decorator_test_model
-#def test_ising_powLR():
-#    return ising_powLR(Gamma=1, J=1, alpha=2, dtype=torch.float64, device='cpu') 

@@ -62,23 +62,25 @@ class xxz_spm(object):
     """
     def __init__(self, Jz, Jxy, dtype, device):
         s = spin_half(dtype, device)
+        Jxy_sign = np.sign(Jxy)
+        Jxy_abs = np.abs(Jxy)
         Jz_sign = np.sign(Jz)
         Jz_abs = np.abs(Jz)
 
         Q = torch.zeros(2,2, dtype=dtype, device=device)
         L = torch.cat((
-            s.Sp.view(1,2,2)*np.sqrt(Jxy/2),
-            s.Sm.view(1,2,2)*np.sqrt(Jxy/2),
+            s.Sp.view(1,2,2)*np.sqrt(Jxy_abs/2),
+            s.Sm.view(1,2,2)*np.sqrt(Jxy_abs/2),
             np.sqrt(Jz_abs)*s.Z.view(1,2,2)/2
             ), dim=0)
         R = torch.cat((
-            s.Sm.view(1,2,2)*np.sqrt(Jxy/2),
-            s.Sp.view(1,2,2)*np.sqrt(Jxy/2),
-            -Jz_sign * np.sqrt(Jz_abs)*s.Z.view(1,2,2)/2
+            s.Sm.view(1,2,2)*np.sqrt(Jxy_abs/2)*Jxy_sign,
+            s.Sp.view(1,2,2)*np.sqrt(Jxy_abs/2)*Jxy_sign,
+            np.sqrt(Jz_abs)*s.Z.view(1,2,2)/2 * (-Jz_sign)
             ), dim=0)
         P = torch.zeros(3,3,2,2, dtype=dtype, device=device)
         self.T = cmpo(Q, L, R, P)
-        self.W = torch.tensor([[0, 1, 0], [1, 0, 0], [0, 0, -Jz_sign]], dtype=dtype, device=device)
+        self.W = torch.tensor([[0, Jxy_sign, 0], [Jxy_sign, 0, 0], [0, 0, -Jz_sign]], dtype=dtype, device=device)
         self.ph_leg = 2
         self.d = 3
 
@@ -89,23 +91,25 @@ class xxz(object):
     """
     def __init__(self, Jz, Jxy, dtype, device):
         s = spin_half(dtype, device)
+        Jxy_sign = np.sign(Jxy)
+        Jxy_abs = np.abs(Jxy)
         Jz_sign = np.sign(Jz)
         Jz_abs = np.abs(Jz)
 
         Q = torch.zeros(2,2, dtype=dtype, device=device)
         L = torch.cat((
-             np.sqrt(Jxy)/2 * s.X.view(1,2,2),
-             np.sqrt(Jxy)/2 * s.iY.view(1,2,2),
+             np.sqrt(Jxy_abs)/2 * s.X.view(1,2,2),
+             np.sqrt(Jxy_abs)/2 * s.iY.view(1,2,2),
              np.sqrt(Jz_abs)/2 * s.Z.view(1,2,2)
              ), dim=0 )
         R = torch.cat((
-             np.sqrt(Jxy)/2 * s.X.view(1,2,2),
-             -np.sqrt(Jxy)/2 * s.iY.view(1,2,2),
+             np.sqrt(Jxy_abs)/2 * s.X.view(1,2,2)*Jxy_sign,
+             -np.sqrt(Jxy_abs)/2 * s.iY.view(1,2,2)*Jxy_sign,
              -Jz_sign * np.sqrt(Jz_abs)/2 * s.Z.view(1,2,2)
              ), dim=0 )
         P = torch.zeros(3,3,2,2, dtype=dtype, device=device)
         self.T = cmpo(Q, L, R, P)
-        self.W = torch.diag(torch.tensor([1,-1,-Jz_sign], dtype=dtype, device=device))
+        self.W = torch.diag(torch.tensor([Jxy_sign,-Jxy_sign,-Jz_sign], dtype=dtype, device=device))
         self.ph_leg = 2 
         self.d = 3
 
