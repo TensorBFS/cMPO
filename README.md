@@ -5,7 +5,7 @@
 
 [![Build Status](https://api.travis-ci.com/TensorBFS/cMPO.svg?token=bCr4MXNqz8r1WxLSWzAC&branch=master)](https://travis-ci.com/github/TensorBFS/cMPO)
 
-This is a PyTorch implementation of the cMPO approach to finite temperature quantum states. The cMPO approach is applicable to one-dimensional quantum systems with short-range or long-range interactions. This approach is described in the paper "Continuous Matrix Product Operator Approach to Finite Temperature Quantum States" (arXiv link).
+This is a PyTorch implementation of the cMPO approach to finite temperature quantum states. The cMPO approach is applicable to one-dimensional quantum systems with short-range or long-range interactions. This approach is described in the paper "Continuous Matrix Product Operator Approach to Finite Temperature Quantum States" ([arXiv link](https://arxiv.org/abs/2004.12928)).
 
 ## Features
 
@@ -41,4 +41,17 @@ More models are defined in `model.py`, and one can investigate the thermodynamic
 and simply replace `ising` by the model that you are interested in. You can also  easily simulate your own models by adding them to  `model.py`.
 
 To compute more quantities, like local observables and dynamical properties, you can use `postprocess.py` to access the checkpoint data files and calculate these quantities without running your simulation again.
+
+## To cite
+
+```latex
+@misc{tang2020continuous,
+    title={Continuous matrix product operator approach to finite temperature quantum states},
+    author={Wei Tang and Hong-Hao Tu and Lei Wang},
+    year={2020},
+    eprint={2004.12928},
+    archivePrefix={arXiv},
+    primaryClass={cond-mat.str-el}
+}
+```
 
