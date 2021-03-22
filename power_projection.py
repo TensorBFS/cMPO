@@ -5,8 +5,7 @@ import numpy as np
 import torch
 import os, sys, io, subprocess
 import os.path
-os.environ['OMP_NUM_THREADS']='15'
-torch.set_num_threads(15)
+torch.set_num_threads(int(os.environ['OMP_NUM_THREADS']))
 torch.manual_seed(42)
 
 from cmpo import *
@@ -178,6 +177,36 @@ def Cv(psi, Lpsi, T, beta):
 
     return (beta**2) * (up - dn).item()
 
+def reduced_density_matrix(psi, tau, beta):
+    bondD = psi.dim
+    M = density_matrix(psi, psi)
+    w0, v0 = eigensolver(M)
+    w0 = w0 - torch.logsumexp(beta*w0, dim=0) / beta
+    expM = lambda x: v0 @ torch.diag(torch.exp(x*w0)) @ v0.t()
+    def reshapeM(M): 
+        M1 = M.reshape(bondD, bondD, bondD, bondD)
+        M1 = M1.permute(0,2,1,3).reshape(bondD**2, bondD**2)
+        return M1
+    expM1 = reshapeM(expM(tau))
+    expM2 = reshapeM(expM(beta - tau))
+
+    w, v = eigensolver(expM1)
+    w_sqrt = torch.diag(torch.sqrt(w))    
+
+    return w_sqrt @ v.t() @ expM2.t() @ v @ w_sqrt
+
+def entanglement_entropy(psi, tau, beta):
+    """ use the boundary cMPS to calculate von Neumann entropy
+        on interval tau
+    """
+    rho = reduced_density_matrix(psi, tau, beta)
+    w, _ = eigensolver(rho)
+
+    result = -torch.sum(w * torch.log(w))
+    # fot test (renyi-2)
+    #result = torch.log(torch.sum(w**2)) / (1-2)
+    return result
+
 def klein(psi, W, beta):
     """ calculate the klein bottle entropy
         psi: cMPS (right eigenvector)
@@ -230,6 +259,7 @@ if __name__=='__main__':
     parser.add_argument("-Nmax", type=int, default=6, help="Nmax")
 
     parser.add_argument("-resultdir", type=str, default='tmpdata', help="result folder")
+    parser.add_argument("-init", type=str, default='none', help="init")
 
     parser.add_argument("-float32", action='store_true', help="use float32")
     parser.add_argument("-cuda", type=int, default=-1, help="use GPU")
@@ -248,31 +278,69 @@ if __name__=='__main__':
     subprocess.check_call(cmd)
     print("---> log and chkp saved to ", key)
 
-    ### construct cMPO. for more models see model.py
+    ### construct cMPO for more models see model.py
     s = model.spin_half(dtype, device)
     ising = model.ising(Gamma=args.Gamma, J=args.J, dtype=dtype, device=device) # cmpo def
     T = ising.T
     W = ising.W
     ph_leg = ising.ph_leg
+    d = ising.d
 
     ### initialize
-    ### after initialization bondD/ph_leg < psi.dim < or = bondD
-    init_step = int(np.floor(np.log(bondD) / np.log(ph_leg)))
-    psi = cmps(T.Q, T.L)
-    Lpsi = cmps(T.Q, T.R)
-    for ix in range(init_step-1):
-        psi = act(T, psi)  
-        Lpsi = act(T.t(), psi)
-    psi = psi.diagQ()
-    Lpsi = Lpsi.diagQ()
+    if args.init == 'none':
+        ### after initialization bondD/ph_leg < psi.dim < or = bondD
+        init_step = int(np.floor(np.log(bondD) / np.log(ph_leg)))
+        psi = cmps(T.Q, T.L)
+        Lpsi = cmps(T.Q, T.R)
+        for ix in range(init_step-1):
+            psi = act(T, psi)  
+            Lpsi = act(T.t(), psi)
+        psi = psi.diagQ()
+        Lpsi = Lpsi.diagQ()
+    else:
+        f_meas = io.open(args.init, 'r')
+        data_arr = np.loadtxt(f_meas)
+        optim_step = int(data_arr[np.argmin(data_arr[:, 1]), 0])
+        print('optim step', optim_step)
+    
+        D0 = int(args.init.split('bondD')[1].split('_beta')[0])
+        beta0 = float(args.init.split('_beta')[1].split('_Gamma')[0])
+
+        # read out right eigenvector
+        psidata_name = args.init[:-9]+'/psi_{:03d}.pt'.format(optim_step)
+        Q = torch.rand(D0, dtype=dtype, device=device)
+        R = torch.rand(d,D0,D0, dtype=dtype, device=device)
+        Q = torch.nn.Parameter(Q)
+        R = torch.nn.Parameter(R)
+        psidata = data_cmps(Q, R)
+        dataload(psidata, psidata_name)
+        factor = beta0/beta
+        psi = cmps(torch.diag(Q)*factor, R*np.sqrt(factor)).detach()
+
+        # read out left eigenvector
+        if W is None:
+            Lpsidata_name = args.init[:-9]+'/Lpsi_{:03d}.pt'.format(optim_step)
+            Ql = torch.rand(D0, dtype=dtype, device=device)
+            Rl = torch.rand(d,D0,D0, dtype=dtype, device=device)
+            Ql = torch.nn.Parameter(Ql)
+            Rl = torch.nn.Parameter(Rl)
+            Lpsidata = data_cmps(Ql, Rl)
+            dataload(Lpsidata, Lpsidata_name)
+            Lpsi = cmps(torch.diag(Ql), Rl).detach()
+        else:
+            Lpsi = multiply(W, psi)
 
     # power procedure 
     power_counter, step = 0, 0
     Fmin = 9.9e9
     while power_counter < 3:
-        Tpsi = act(T, psi)
+        if psi.dim <= bondD:
+            Tpsi = act(T, psi)
+        else:
+            Tpsi = psi
         psi = variational_compr(Tpsi, beta, bondD, chkp_loc=key+'/psi_{:03d}.pt'.format(step))
-        if W is None:
+
+        if W is None: # this part is outdated
             LpsiT = act(T.t(), Lpsi)
             Lpsi = variational_compr(LpsiT, beta, bondD, chkp_loc=key+'/Lpsi_{:03d}.pt'.format(step))
         else:
@@ -282,17 +350,18 @@ if __name__=='__main__':
         F_value = F(psi, Lpsi, T, beta)
         E_value = E(psi, Lpsi, T, beta)
         Cv_value = Cv(psi, Lpsi, T, beta)
-        chi_value = chi(psi, Lpsi, T, s.Z/2, s.Z/2, beta) / beta
+        Sk_value = klein(psi, W, beta)
+        #chi_value = chi(psi, Lpsi, T, s.Z/2, s.Z/2, beta) / beta
 
         # output measurement results
         logfile_meas = io.open(key+'-meas.log', 'a')
-        message = ('{} ' + 4*'{:.12f} ').format(step, F_value, E_value, Cv_value, chi_value)
-        print('step, F, E, Cv, chi(0) '+ message, end='  \r')
+        message = ('{} ' + 4*'{:.12f} ').format(step, F_value, E_value, Cv_value, Sk_value)
+        print('step, F, E, Cv, Sk '+ message, end='  \n')
         logfile_meas.write(message + u'\n')
         logfile_meas.close()
 
         step += 1
-        if F_value < Fmin - 1e-8:
+        if F_value < Fmin - 1e-11:
             power_counter = 0
             Fmin = F_value
         else: 

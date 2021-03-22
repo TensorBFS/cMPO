@@ -5,9 +5,7 @@ import numpy as np
 import torch 
 import os, io, subprocess
 import os.path
-os.environ['OMP_NUM_THREADS']='15'
-torch.set_num_threads(15)
-torch.manual_seed(42)
+torch.set_num_threads(int(os.environ['OMP_NUM_THREADS']))
 
 def eigensolver(M):
     """ Eigensolver
@@ -15,11 +13,23 @@ def eigensolver(M):
     """
     return torch.symeig(0.5*(M+M.t()), eigenvectors=True)
 
-def log_trace_expm(beta, mat):
-    """ calculates log(tr(exp(beta * mat)) )
-    """
-    w, _ = eigensolver(mat)
-    return torch.logsumexp(beta*w, dim=0)
+class LogTrExpm(torch.autograd.Function):
+    @staticmethod
+    def forward(self, beta, mat):
+        dtype, device = mat.dtype, mat.device
+        #rho = torch.matrix_exp(beta*mat)
+        #tr_rho = torch.trace(rho)
+        w, v = eigensolver(mat)
+        y = torch.logsumexp(beta*w, dim=0)
+        scaled_rho = beta * v @ torch.diag(torch.exp(beta*w-y)) @ v.t()
+        self.save_for_backward(scaled_rho)
+        return y
+
+    @staticmethod
+    def backward(self, dy):
+        scaled_rho = self.saved_tensors[0]
+        dmat = dy * scaled_rho.t()
+        return None, dmat
 
 class cmpo(object):
     """ the object for cMPO
@@ -184,7 +194,8 @@ def ln_ovlp(mps1, mps2, beta):
     """ calculate log(<mps1|mps2>)
     """
     M = density_matrix(mps1, mps2)
-    return log_trace_expm(beta, M)
+    return LogTrExpm.apply(beta, M)
+
 def Fidelity(psi, mps, beta):
     """ calculate log [ <psi|mps> / sqrt(<psi|psi>) ]
     """
@@ -192,51 +203,79 @@ def Fidelity(psi, mps, beta):
     dn = ln_ovlp(psi, psi, beta)
     return up - 0.5*dn
 
-def rdm_update(mps1, mps2, beta, chi):
-    """ initialize the isometry 
-        keep the chi largest weights of the reduced density matrix
-        return the isometry
+def energy_cut(mps, chi):
+    """initialize the isometry 
+    keep the chi largest eigenvalues in the Q matrix of the cMPS
     """
-    rho = density_matrix(mps1, mps2)
-    D1, D2 = mps1.dim, mps2.dim
-    rdm = torch.einsum('xaxb->ab', rho.view(D1, D2, D1, D2))
-    w, v = eigensolver(rdm)
+    w, v = eigensolver(mps.Q)
     P = v[:, -chi:]
     return P
 
-def mera_update(mps, beta, chi, tol=1e-10, alpha=0.5, maxiter=20):
-    """ update the isometry with iterative SVD update
+def interpolate_cut(cut1, cut2, theta):
+    """ interpolate two isometries
+     theta = pi/2: mix = cut1
+     theta = 0   : mix = cut2
+    """
+    mix = np.sin(theta) * cut1 + np.cos(theta) * cut2
+    U, _, V = torch.svd(mix)
+    return U@V.t()
+
+def adaptive_mera_update(mps, beta, chi, tol=1e-12, maxiter=50):
+    """ update the isometry using iterative SVD update with line search
         mps: the original cMPS
         beta: inverse temperature
         chi: target bond dimension
         return the compressed cMPS
     """
-    P = rdm_update(mps, mps, beta, chi)
+    P = energy_cut(mps, chi)
     last = 9.9e9
     step = 0
     while step < maxiter:
         mps_new = mps.project(P.requires_grad_())
-        loss = ln_ovlp(mps, mps_new, beta)
+        loss = ln_ovlp(mps_new, mps, beta) - 0.5 * ln_ovlp(mps_new, mps_new.detach(), beta) 
         diff = abs(loss.item() - last)
+
+        #print('adaptive', step, loss.item() - 0.5*ln_ovlp(mps, mps, beta).item())
 
         if (diff < tol): break
 
+        print(step, end='\r')
+
         grad = torch.autograd.grad(loss, P)[0]
         last = loss.item() 
+        Fidel0 = loss.item() 
+        Fidel_test = 1e99
+
         step += 1
     
         U, _, V = torch.svd(grad)
         #https://mathoverflow.net/questions/262560/natural-ways-of-interpolating-unitary-matrices
         #https://groups.google.com/forum/#!topic/manopttoolbox/2zhx67doXaU
         #interpolate between unitary matrices
-        mix = alpha * U@V.t() + (1.-alpha) * P.data
-        #then retraction back to unitary
-        U, _, V = torch.svd(mix)
-        P = U@V.t()
-    
+        theta = np.pi
+        proceed = False
+        while proceed == False:
+            theta = theta / 2
+            if theta < np.pi / 1.9**12: 
+                theta = 0
+                P_test = P.data
+            else:
+                P_test = interpolate_cut(U@V.t(), P.data, theta)
+
+            #mix = np.sin(theta) * U@V.t() + np.cos(theta) * P.data
+            ##then retraction back to unitary
+            #U, _, V = torch.svd(mix)
+            #P_test = U@V.t()
+
+            mps_test = mps.project(P_test)
+            Fidel1_test = Fidelity(mps_test, mps, beta)
+            if Fidel1_test > Fidel0 or np.isclose(theta, 0):
+                P = P_test
+                proceed=True
+
     return mps_new 
 
-def variational_compr(mps, beta, chi, chkp_loc, tol=1e-8):
+def variational_compr(mps, beta, chi, chkp_loc, init=None, tol=1e-12):
     """ variationally optimize the compressed cMPS 
         mps: the original cMPS
         beta: the inverse temperature
@@ -245,9 +284,11 @@ def variational_compr(mps, beta, chi, chkp_loc, tol=1e-8):
         tol: tolerance
         return the compressed cMPS
     """
-    psi = mera_update(mps, beta, chi)
-    psi = psi.diagQ()
-
+    if init is None: 
+        psi = adaptive_mera_update(mps, beta, chi, tol=tol)
+        psi = psi.diagQ()
+    else:
+        psi = init
     Q = torch.nn.Parameter(torch.diag(psi.Q))
     R = torch.nn.Parameter(psi.R)
     psi_data = data_cmps(Q, R)
@@ -261,13 +302,12 @@ def variational_compr(mps, beta, chi, chkp_loc, tol=1e-8):
         loss.backward()
         return loss
 
-    counter = 0
+    is_converged = False
     loss0 = 9.99e99
-    while counter < 2:
+    while not is_converged:
         loss = optimizer.step(closure)
         print('--> ' + '{:.12f}'.format(loss.item()), end='\r')
-        if np.isclose(loss.item(), loss0, rtol=tol, atol=tol):
-            counter += 1
+        is_converged = np.isclose(loss.item(), loss0, rtol=tol, atol=tol)
         loss0 = loss.item()
 
     # "normalize"
