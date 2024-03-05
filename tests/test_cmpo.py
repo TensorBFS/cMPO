@@ -19,7 +19,7 @@ def test_project():
 
     A = torch.rand(8,8, dtype=dtype, device=device)
     A = A + A.t()
-    _, U = torch.symeig(A, eigenvectors=True)
+    _, U = torch.linalg.eigh(A)
     mps1 = mps.project(U)
    
     assert np.isclose(Fidelity(mps, mps1, beta), 0.5*ln_ovlp(mps, mps, beta))
