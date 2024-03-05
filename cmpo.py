@@ -11,7 +11,7 @@ def eigensolver(M):
     """ Eigensolver
         manually symmetrize M before the eigen decomposition
     """
-    return torch.symeig(0.5*(M+M.t()), eigenvectors=True)
+    return torch.linalg.eigh(0.5*(M+M.t()))
 
 class LogTrExpm(torch.autograd.Function):
     @staticmethod
